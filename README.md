@@ -6,10 +6,10 @@
 </ul>
 
 <h2>PENJELASAN PROYEK</h2>
-
+<ul>
     Pengguna dapat mengakses web dashboard untuk melihat status lampu, menyalakan atau mematikan lampu dari jarak jauh, serta mengatur jadwal otomatis sesuai kebutuhan. Komunikasi data antara perangkat dan dashboard menggunakan protokol MQTT sehingga proses pengiriman dan penerimaan data dapat berlangsung secara cepat dan ringan.
 
-Selain fitur kontrol, sistem juga menyimpan histori penggunaan lampu yang dapat digunakan untuk menganalisis pola pemakaian. Dengan adanya fitur otomatisasi dan monitoring realtime, pengguna dapat mengurangi pemborosan energi akibat lampu yang lupa dimatikan serta meningkatkan efisiensi penggunaan listrik di ruang tamu.
+Selain fitur kontrol, sistem juga menyimpan histori penggunaan lampu yang dapat digunakan untuk menganalisis pola pemakaian. Dengan adanya fitur otomatisasi dan monitoring realtime, pengguna dapat mengurangi pemborosan energi akibat lampu yang lupa dimatikan serta meningkatkan efisiensi penggunaan listrik di ruang tamu.</ul>
 
 <h2>CARA KERJA</h2>
 <ul>
