@@ -1,4 +1,4 @@
-# Sistem-Mikrokontroller-Kelompok 2
+# Sistem Mikrokontroller—Kelompok 2
 
 <h2>JUDUL PROYEK</h2>
 <ul>
