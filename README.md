@@ -34,20 +34,19 @@ Dengan adanya sistem ini, pengguna tidak perlu khawatir lagi saat meninggalkan r
 ## 🧩 Komponen Proyek
 
 ### 🔧 Hardware
-<p>1. ESP32
-<p>2. Relay Module 1 Channel
-<p>3. Lampu LED / Bohlam
-<p>4. Breadboard
-<p>5. Kabel Jumper
-<p>6. Adaptor USB
+1. ESP32
+2. Rain Drop Module Black  Board
+3. Servo SG90
+4. Kabel Jumper
+5. Adaptor USB
 
 ### 💻 Software
-<p>1. Arduino IDE
-<p>2. MQTT Broker (Mosquitto/HiveMQ)
-<p>3. Web Dashboard
-<p>4. Database MySQL
-<p>5. XAMPP/Laragon
-</ul>
+1. Arduino IDE
+2. MQTT Broker (Mosquitto/HiveMQ)
+3. Web Dashboard
+4. Database MySQL
+5. XAMPP/Laragon
+
 
 ---
 
