@@ -36,21 +36,32 @@ void gerakServo(bool buka) {
   s1.write(buka ? 120 : 0);
 }
 
-// ===== JAM =====
-void getJamSekarang(int &jam, int &menit) {
+// ===== JAM — akurat sampai DETIK =====
+// Menyimpan detik juga agar cek jadwal lebih presisi
+void getWaktuSekarang(int &jam, int &menit, int &detik) {
   unsigned long selisihMs = millis() - millisSaatSync;
-  int totalSync = jamBrowser * 60 + menitBrowser;
-  int totalNow  = totalSync + (int)(selisihMs / 60000UL);
-  totalNow      = totalNow % 1440;
-  jam   = totalNow / 60;
-  menit = totalNow % 60;
+  // Total detik sejak sync
+  unsigned long totalDetikSync = (unsigned long)jamBrowser * 3600
+                                + (unsigned long)menitBrowser * 60;
+  unsigned long totalDetikNow  = totalDetikSync + (selisihMs / 1000UL);
+  totalDetikNow = totalDetikNow % 86400UL;  // wrap 24 jam (86400 detik)
+  jam   = totalDetikNow / 3600;
+  menit = (totalDetikNow % 3600) / 60;
+  detik = totalDetikNow % 60;
 }
 
+// Helper: ambil hanya jam & menit
+void getJamSekarang(int &jam, int &menit) {
+  int detik;
+  getWaktuSekarang(jam, menit, detik);
+}
+
+// ===== CEK JADWAL =====
 bool didalamJadwal() {
   if (millisSaatSync == 0) return false;
-  int jam, menit;
-  getJamSekarang(jam, menit);
-  int sekarang = jam * 60 + menit;
+  int jam, menit, detik;
+  getWaktuSekarang(jam, menit, detik);
+  int sekarang = jam * 60 + menit;  // dalam menit
   if (jadwalNyalaMenit <= jadwalMatiMenit)
     return sekarang >= jadwalNyalaMenit && sekarang < jadwalMatiMenit;
   else
@@ -59,6 +70,7 @@ bool didalamJadwal() {
 
 // ===================================================
 // TASK 1 — SENSOR & SERVO (prioritas 3, Core 1)
+// Cek sensor tiap 200ms
 // ===================================================
 void taskSensor(void* param) {
   while (true) {
@@ -75,21 +87,44 @@ void taskSensor(void* param) {
 
 // ===================================================
 // TASK 2 — JADWAL LAMPU (prioritas 2, Core 1)
+//
+// FIX UTAMA: Bangun tiap 1 detik, tapi hanya eksekusi
+// kalau menit berubah → akurasi ±1 detik, bukan ±10 detik
 // ===================================================
 void taskJadwal(void* param) {
+  int menitTerakhir = -1;  // tracking menit sebelumnya
+
   while (true) {
     if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-      if (lampuModeJadwal) {
-        bool harusNyala = didalamJadwal();
-        if (harusNyala != lampuNyala) {
-          lampuNyala = harusNyala;
-          digitalWrite(LAMPU_PIN, lampuNyala ? HIGH : LOW);
-          Serial.println(lampuNyala ? "Jadwal: Lampu ON" : "Jadwal: Lampu OFF");
+      if (lampuModeJadwal && millisSaatSync > 0) {
+        int jam, menit, detik;
+        getWaktuSekarang(jam, menit, detik);
+
+        // Hanya proses kalau menit baru berbeda dari menit sebelumnya
+        // → cegah eksekusi berulang di menit yang sama
+        if (menit != menitTerakhir) {
+          menitTerakhir = menit;
+
+          bool harusNyala = didalamJadwal();
+          if (harusNyala != lampuNyala) {
+            lampuNyala = harusNyala;
+            digitalWrite(LAMPU_PIN, lampuNyala ? HIGH : LOW);
+            Serial.printf("[Jadwal] %02d:%02d:%02d → Lampu %s\n",
+              jam, menit, detik,
+              lampuNyala ? "ON" : "OFF"
+            );
+          }
         }
+      } else if (!lampuModeJadwal) {
+        // Reset tracking saat pindah ke mode manual
+        // agar saat balik ke jadwal langsung cek ulang
+        menitTerakhir = -1;
       }
       xSemaphoreGive(xMutex);
     }
-    vTaskDelay(pdMS_TO_TICKS(10000));
+
+    // Bangun tiap 1 detik — jauh lebih presisi dari 10 detik
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
@@ -106,7 +141,7 @@ void taskWeb(void* param) {
 // ===== ENDPOINT: STATUS JSON =====
 void handleStatus() {
   char nyalaStr[6], matiStr[6];
-  int jam = 0, menit = 0;
+  int jam = 0, menit = 0, detik = 0;
 
   xSemaphoreTake(xMutex, portMAX_DELAY);
   sprintf(nyalaStr, "%02d:%02d", jadwalNyalaMenit / 60, jadwalNyalaMenit % 60);
@@ -117,14 +152,14 @@ void handleStatus() {
   bool _modeA  = modeOtomatis;
   bool _modeL  = lampuModeJadwal;
   bool _synced = millisSaatSync > 0;
-  if (_synced) getJamSekarang(jam, menit);
+  if (_synced) getWaktuSekarang(jam, menit, detik);
   xSemaphoreGive(xMutex);
 
   char buf[320];
   snprintf(buf, sizeof(buf),
     "{\"hujan\":%s,\"servo\":%s,\"lampu\":%s,\"modeAtap\":%s,"
     "\"modeLampu\":%s,\"jadwalNyala\":\"%s\",\"jadwalMati\":\"%s\","
-    "\"jamSync\":%s,\"jam\":%d,\"menit\":%d}",
+    "\"jamSync\":%s,\"jam\":%d,\"menit\":%d,\"detik\":%d}",
     _hujan  ? "true":"false",
     _servo  ? "true":"false",
     _lampu  ? "true":"false",
@@ -132,7 +167,7 @@ void handleStatus() {
     _modeL  ? "true":"false",
     nyalaStr, matiStr,
     _synced ? "true":"false",
-    jam, menit
+    jam, menit, detik
   );
 
   server.sendHeader("Access-Control-Allow-Origin", "*");
@@ -140,12 +175,20 @@ void handleStatus() {
 }
 
 // ===== ENDPOINT: SYNC JAM =====
+// FIX: Sync menyimpan detik juga (dari browser)
 void handleSyncJam() {
   if (server.hasArg("h") && server.hasArg("m")) {
     xSemaphoreTake(xMutex, portMAX_DELAY);
     jamBrowser     = server.arg("h").toInt();
     menitBrowser   = server.arg("m").toInt();
+    // Detik di-set 0 saat sync — millis() offset akan menghitung sisanya
     millisSaatSync = millis();
+    // Kurangi millisSaatSync dengan detik yang sudah lewat di menit ini
+    // agar jam lebih akurat jika sync terjadi di tengah menit
+    if (server.hasArg("s")) {
+      int detikBrowser = server.arg("s").toInt();
+      millisSaatSync -= (unsigned long)detikBrowser * 1000UL;
+    }
     xSemaphoreGive(xMutex);
     Serial.printf("Jam sync: %02d:%02d\n", jamBrowser, menitBrowser);
   }
@@ -206,7 +249,6 @@ void handleJadwal() {
 }
 
 // ===== HALAMAN WEB =====
-// HTML disimpan di Flash (PROGMEM) bukan RAM → lebih hemat memori
 const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -232,40 +274,27 @@ const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
   .container { max-width: 460px; margin: 0 auto; padding: 20px 16px 40px; }
-
-  /* Header */
   .header { text-align: center; margin-bottom: 24px; }
   .header h1 { font-size: 1.1rem; color: var(--text2); font-weight: 500; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
   .clock { font-size: 3rem; font-weight: 700; color: var(--text); letter-spacing: 4px; font-variant-numeric: tabular-nums; }
   .dot-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-left: 8px; vertical-align: middle; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
-
-  /* Cards */
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
   .card-title { font-size: 0.7rem; color: var(--text2); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 14px; font-weight: 600; }
-
-  /* Status grid */
   .status-grid { display: grid; gap: 8px; }
   .status-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--surface2); border-radius: 10px; }
   .status-label { font-size: 0.85rem; color: var(--text2); }
   .status-val { font-size: 0.85rem; font-weight: 600; }
-
-  /* Badge */
   .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
   .badge-green  { background: rgba(34,197,94,.15);  color: var(--green); }
   .badge-orange { background: rgba(249,115,22,.15); color: var(--orange); }
   .badge-blue   { background: rgba(59,130,246,.15); color: var(--blue); }
   .badge-purple { background: rgba(168,85,247,.15); color: var(--purple); }
-  .badge-red    { background: rgba(239,68,68,.15);  color: var(--red); }
-
-  /* Icon dot */
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
   .dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
   .dot-red    { background: var(--red);   box-shadow: 0 0 6px var(--red); }
   .dot-blue   { background: var(--blue);  box-shadow: 0 0 6px var(--blue); }
   .dot-gray   { background: var(--text2); }
-
-  /* Buttons */
   .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
   .btn { padding: 12px; border: none; border-radius: 10px; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: all .15s; letter-spacing: .3px; }
   .btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
@@ -278,15 +307,8 @@ const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
   .btn-gray   { background: rgba(148,163,184,.1);color: var(--text2);  border: 1px solid var(--border); }
   .btn-yellow { background: rgba(234,179,8,.2);  color: var(--yellow); border: 1px solid rgba(234,179,8,.3); }
   .btn-purple { background: rgba(168,85,247,.2); color: var(--purple); border: 1px solid rgba(168,85,247,.3); }
-  .btn-full   { grid-column: 1/-1; }
-
-  /* Divider */
   .divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
-
-  /* Note */
   .note { font-size: 0.75rem; color: var(--text2); margin-top: 8px; text-align: center; min-height: 14px; }
-
-  /* Jadwal */
   .jadwal-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .jadwal-row label { font-size: 0.82rem; color: var(--text2); width: 50px; }
   .jadwal-row input[type=time] {
@@ -302,11 +324,9 @@ const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
     background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(59,130,246,.3));
     color: var(--text); border: 1px solid rgba(168,85,247,.4);
     border-radius: 10px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
-    transition: all .15s; letter-spacing: .3px;
+    transition: all .15s;
   }
   .btn-save:hover { filter: brightness(1.2); transform: translateY(-1px); }
-
-  /* Toast */
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
     background: var(--surface); border: 1px solid var(--border); color: var(--text);
@@ -315,10 +335,10 @@ const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
     box-shadow: 0 4px 20px rgba(0,0,0,.4);
   }
   .toast.show { transform: translateX(-50%) translateY(0); }
-
-  /* RTOS badge */
   .rtos-info { text-align: center; margin-top: 16px; }
   .rtos-info span { font-size: 0.7rem; color: var(--text2); background: var(--surface2); padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); }
+  /* Jam ESP32 kecil di bawah jam browser */
+  .esp-time { text-align: center; font-size: 0.75rem; color: var(--text2); margin-top: 4px; margin-bottom: 16px; }
 </style>
 </head>
 <body>
@@ -327,9 +347,10 @@ const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
   <div class="header">
     <h1>Smart Home ESP32</h1>
     <div class="clock" id="jam">--:--:--<span class="dot-pulse"></span></div>
+    <!-- Tampilkan jam ESP32 untuk debug sinkronisasi -->
+    <div class="esp-time" id="espTime">ESP32: --:--:--</div>
   </div>
 
-  <!-- Status -->
   <div class="card">
     <div class="card-title">Status Sistem</div>
     <div class="status-grid">
@@ -356,7 +377,6 @@ const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Kontrol Atap -->
   <div class="card">
     <div class="card-title">Kontrol Atap</div>
     <div class="btn-group">
@@ -371,7 +391,6 @@ const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
     <p class="note" id="noteAtap"></p>
   </div>
 
-  <!-- Kontrol Lampu -->
   <div class="card">
     <div class="card-title">Kontrol Lampu</div>
     <div class="btn-group">
@@ -381,12 +400,11 @@ const char HTML_PAGE[] PROGMEM = R"rawliteral(<!DOCTYPE html>
     <hr class="divider">
     <div class="btn-group">
       <button class="btn btn-yellow" id="btnOn"  onclick="kirim('/lampu?v=on')">☀ ON</button>
-      <button class="btn btn-red"    id="btnOff" onclick="kirim('/lampu?v=off')">✕ OFF</button>
+      <button class="btn btn-red"    id="btnOff" onclick="kirim('/lampu?v=off')">OFF</button>
     </div>
     <p class="note" id="noteLampu"></p>
   </div>
 
-  <!-- Jadwal -->
   <div class="card">
     <div class="card-title">Atur Jadwal Lampu</div>
     <div class="jadwal-row">
@@ -415,18 +433,21 @@ function updateJam() {
   var h = String(now.getHours()).padStart(2,'0');
   var m = String(now.getMinutes()).padStart(2,'0');
   var s = String(now.getSeconds()).padStart(2,'0');
-  document.getElementById('jam').innerHTML = h+':'+m+':'+s+'<span class="dot-pulse"></span>';
+  document.getElementById('jam').innerHTML =
+    h+':'+m+':'+s+'<span class="dot-pulse"></span>';
 }
 setInterval(updateJam, 1000);
 updateJam();
 
-// ── Sync jam ke ESP32 ────────────────────────────────
+// ── Sync jam ke ESP32 — kirim jam + menit + DETIK ───
+// FIX: kirim detik juga agar ESP32 tahu posisi di dalam menit
 function syncJam() {
   var now = new Date();
-  fetch('/syncjam?h='+now.getHours()+'&m='+now.getMinutes()).catch(function(){});
+  fetch('/syncjam?h='+now.getHours()+'&m='+now.getMinutes()+'&s='+now.getSeconds())
+    .catch(function(){});
 }
 syncJam();
-setInterval(syncJam, 60000);
+setInterval(syncJam, 60000);  // sync ulang tiap 1 menit agar tidak drift
 
 // ── Toast notif ──────────────────────────────────────
 function showToast(msg) {
@@ -443,8 +464,7 @@ function kirim(url) {
     .catch(function(){ showToast('Koneksi gagal'); });
 }
 
-// ── Flag: apakah user sedang edit jadwal ─────────────
-// FIX: input tidak di-overwrite saat user lagi ngedit
+// ── Flag: user sedang edit jadwal ────────────────────
 var sedangEdit = false;
 document.getElementById('inNyala').addEventListener('focus', function(){ sedangEdit = true; });
 document.getElementById('inMati').addEventListener('focus',  function(){ sedangEdit = true; });
@@ -457,18 +477,35 @@ function simpanJadwal() {
   var mati  = document.getElementById('inMati').value;
   if (!nyala || !mati) { showToast('Isi jam nyala & mati dulu!'); return; }
   var now = new Date();
-  fetch('/syncjam?h='+now.getHours()+'&m='+now.getMinutes())
+  // Sync jam dulu (dengan detik), baru simpan jadwal
+  fetch('/syncjam?h='+now.getHours()+'&m='+now.getMinutes()+'&s='+now.getSeconds())
     .then(function(){ return fetch('/jadwal?nyala='+nyala+'&mati='+mati); })
-    .then(function(r){ if(r.ok){ showToast('✓ Jadwal tersimpan!'); sedangEdit = false; updateStatus(); } })
+    .then(function(r){
+      if (r.ok) {
+        showToast('✓ Jadwal tersimpan!');
+        sedangEdit = false;
+        updateStatus();
+      }
+    })
     .catch(function(){ showToast('Gagal simpan jadwal'); });
 }
 
-// ── Update status (polling tiap 4 detik) ─────────────
-// Polling 4 detik lebih ringan dari 3 detik
+// ── Update status ────────────────────────────────────
 function updateStatus() {
   fetch('/status')
     .then(function(r){ return r.json(); })
     .then(function(d){
+      // Tampilkan jam ESP32 (untuk debug sinkronisasi)
+      if (d.jamSync) {
+        var ej = String(d.jam).padStart(2,'0');
+        var em = String(d.menit).padStart(2,'0');
+        var es = String(d.detik).padStart(2,'0');
+        document.getElementById('espTime').textContent =
+          'ESP32: ' + ej + ':' + em + ':' + es;
+      } else {
+        document.getElementById('espTime').textContent = 'ESP32: belum sync';
+      }
+
       // Sensor hujan
       var sHujan = document.getElementById('sHujan');
       if (d.hujan) {
@@ -499,34 +536,36 @@ function updateStatus() {
         sLampu.style.color = '#94a3b8';
       }
 
-      // Badge mode atap
+      // Badge mode
       var ba = document.getElementById('badgeAtap');
       ba.textContent = d.modeAtap ? 'Otomatis' : 'Manual';
       ba.className   = 'badge ' + (d.modeAtap ? 'badge-green' : 'badge-orange');
 
-      // Badge mode lampu
       var bl = document.getElementById('badgeLampu');
       bl.textContent = d.modeLampu ? 'Jadwal' : 'Manual';
       bl.className   = 'badge ' + (d.modeLampu ? 'badge-purple' : 'badge-blue');
 
-      // Disable tombol manual atap saat otomatis
+      // Tombol atap
       document.getElementById('btnBuka').disabled  = d.modeAtap;
       document.getElementById('btnTutup').disabled = d.modeAtap;
-      document.getElementById('noteAtap').textContent = d.modeAtap ? 'Mode Otomatis aktif — ganti ke Manual untuk kontrol' : '';
+      document.getElementById('noteAtap').textContent =
+        d.modeAtap ? 'Mode Otomatis aktif — ganti ke Manual untuk kontrol' : '';
 
-      // Disable tombol lampu saat jadwal
+      // Tombol lampu
       document.getElementById('btnOn').disabled  = d.modeLampu;
       document.getElementById('btnOff').disabled = d.modeLampu;
-      document.getElementById('noteLampu').textContent = d.modeLampu ? 'Mode Jadwal aktif — lampu dikontrol otomatis' : '';
+      document.getElementById('noteLampu').textContent =
+        d.modeLampu ? 'Mode Jadwal aktif — lampu dikontrol otomatis' : '';
 
-      // FIX: update input jadwal HANYA saat user tidak sedang ngedit
+      // Update input jadwal hanya saat tidak diedit
       if (!sedangEdit) {
         document.getElementById('inNyala').value = d.jadwalNyala;
         document.getElementById('inMati').value  = d.jadwalMati;
       }
     })
     .catch(function(){
-      document.getElementById('sHujan').textContent = 'Koneksi terputus...';
+      document.getElementById('sHujan').innerHTML =
+        '<span class="dot dot-red"></span>Koneksi terputus';
     });
 }
 
@@ -574,7 +613,6 @@ void setup() {
   xTaskCreatePinnedToCore(taskWeb,    "Web",    8192, NULL, 1, NULL, 0);
 }
 
-// loop ditidurkan — semua logic di task
 void loop() {
   vTaskDelay(portMAX_DELAY);
 }
