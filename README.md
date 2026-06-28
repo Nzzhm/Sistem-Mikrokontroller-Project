@@ -33,8 +33,8 @@ Sistem dibangun menggunakan mikrokontroler **ESP32** yang terhubung ke **sensor 
 ## 🧩 Komponen Proyek
 
 ### 🔧 Hardware & Pinout
-1. **ESP32 DevKit V1** (Mikrokontroler Utama)
-2. **Rain Drop Sensor** (Sensor Hujan) 
+1. **ESP32 DevKit V1** (Mikrokontroler Utama) |  ![ESP32](images/esp32.jpg)
+2. **Rain Drop Sensor** (Sensor Hujan) | ![Rain Sensor](images/rain_sensor.jpg)
 3. **Servo SG90** (Penggerak Jemuran) 
 4. **LED** (Lampu Teras)
 5. **Kabel Jumper & Adaptor USB**
