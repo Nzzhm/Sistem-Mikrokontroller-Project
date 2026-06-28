@@ -46,6 +46,18 @@ Sistem dibangun menggunakan mikrokontroler **ESP32** yang terhubung ke **sensor 
 
 ---
 
+## 🔌 Skema Rangkaian
+
+### Wiring Diagram
+
+Berikut adalah **koneksi fisik** antara Rain Drop Sensor dengan mikrokontroler:
+
+![Koneksi Rain Sensor ke ESP32](images/rain_sensor.jpg)
+
+> **Catatan:** Foto di atas menggunakan Arduino UNO sebagai ilustrasi koneksi. Namun pada implementasi akhir, kami menggunakan **ESP32 WeMOS** dengan konfigurasi pin yang disesuaikan.
+
+---
+
 ## 📊 Pembagian Tugas Sistem (Multitasking)
 
 Agar sistem berjalan lancar tanpa macet, program dibagi menjadi 3 tugas utama yang berjalan bersamaan:
