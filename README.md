@@ -17,16 +17,12 @@ Sistem dibangun menggunakan mikrokontroler **ESP32** yang terhubung ke **sensor 
 
 ---
 
-## ⚙️ Cara Kerja Sistem
+## 🎯 Tujuan Proyek
 
-1. **Koneksi Wi-Fi:** ESP32 terhubung ke jaringan Wi-Fi agar bisa diakses lewat browser.
-2. **Sinkronisasi Waktu:** Sistem otomatis mengambil data waktu (jam, menit, detik) dari browser pengguna secara berkala agar jadwal lampu tetap akurat.
-3. **Kontrol Atap Jemuran:**
-   * **Mode Otomatis:** Jika sensor terkena air hujan, servo akan otomatis bergerak menutup jemuran. Jika cuaca cerah kembali, servo akan otomatis membuka jemuran.
-   * **Mode Manual:** Pengguna bisa bebas membuka atau menutup jemuran kapan saja melalui tombol di web dashboard.
-4. **Kontrol Lampu Teras:**
-   * **Mode Jadwal:** Lampu akan menyala dan mati secara otomatis sesuai dengan jam operasional yang telah diatur oleh pengguna di halaman web.
-   * **Mode Manual:** Pengguna bisa menyalakan dan mematikan lampu secara langsung lewat tombol di web dashboard.
+1. Membangun sistem **jemuran otomatis** yang dapat mendeteksi hujan dan menutup jemuran secara otomatis.
+2. Membangun sistem **lampu teras otomatis** berdasarkan jadwal waktu.
+3. Menyediakan **dashboard web** yang dapat diakses dari perangkat apapun untuk kontrol manual dan monitoring.
+4. Menerapkan konsep **multitasking** pada ESP32 agar sistem berjalan tanpa hambatan.
 
 ---
 
@@ -55,6 +51,29 @@ Berikut adalah **koneksi fisik** antara Rain Drop Sensor dengan mikrokontroler:
 ![Koneksi Rain Sensor ke ESP32](images/rain_sensor.jpg)
 
 > **Catatan:** Foto di atas menggunakan Arduino UNO sebagai ilustrasi koneksi. Namun pada implementasi akhir, kami menggunakan **ESP32 WeMOS** dengan konfigurasi pin yang disesuaikan.
+
+---
+
+## ⚙️ Cara Kerja Sistem
+### 🌐 Koneksi Wi-Fi
+ESP32 terhubung ke jaringan Wi-Fi agar bisa diakses melalui browser.
+
+### 🕐 Sinkronisasi Waktu
+Sistem otomatis mengambil data waktu (jam, menit, detik) dari **browser pengguna** secara berkala agar jadwal lampu tetap akurat **tanpa RTC**.
+
+### 🏠 Kontrol Atap Jemuran
+
+| Mode | Cara Kerja |
+|------|------------|
+| **Otomatis** | Jika sensor terkena air hujan → servo bergerak **menutup** jemuran. Jika cuaca cerah kembali → servo **membuka** jemuran. |
+| **Manual** | Pengguna bisa bebas membuka/menutup jemuran kapan saja melalui tombol di web dashboard. |
+
+### 💡 Kontrol Lampu Teras
+
+| Mode | Cara Kerja |
+|------|------------|
+| **Jadwal** | Lampu menyala dan mati secara otomatis sesuai jam operasional yang diatur pengguna di halaman web. |
+| **Manual** | Pengguna bisa menyalakan/mematikan lampu langsung lewat tombol di web dashboard. |
 
 ---
 
