@@ -29,7 +29,7 @@ Sistem dibangun menggunakan mikrokontroler **ESP32** yang terhubung ke **sensor 
 ## 🧩 Komponen Proyek
 
 ### 🔧 Hardware & Pinout
-1. **ESP32 DevKit V1** (Mikrokontroler Utama)
+1. **ESP32 WeMOS** (Mikrokontroler Utama)
 2. **Rain Drop Sensor** (Sensor Hujan) 
 3. **Servo SG90** (Penggerak Jemuran)
 4. **LED** (Lampu Teras)
@@ -94,9 +94,52 @@ Agar sistem berjalan lancar tanpa macet, program dibagi menjadi 3 tugas utama ya
 
 ---
 
+## 🖥️ Tampilan Dashboard
+
+Berikut adalah tampilan **web dashboard** yang digunakan untuk memonitor dan mengontrol sistem:
+
+![Dashboard](images/tampilan_web_1.jpg)
+
+> **Screenshot halaman utama dashboard dengan kontrol jemuran dan lampu teras.**
+
+---
+
+## 📄 Hasil Pengujian
+
+### ✅ Pengujian Sensor Hujan
+
+| Skenario | Kondisi | Aksi Servo | Status |
+|----------|---------|------------|--------|
+| Sensor basah (terkena air) | Hujan | Menutup | ✅ Berhasil |
+| Sensor kering (tidak terkena air) | Cerah | Membuka | ✅ Berhasil |
+
+### ✅ Pengujian Lampu Teras (Mode Jadwal)
+
+| Waktu | Status Lampu | Keterangan |
+|-------|--------------|------------|
+| 11.59 | ON | Menyala (sesuai jadwal) |
+| 12.01 | OFF | Mati (sesuai jadwal) |
+
+### ✅ Pengujian Kontrol Manual
+
+| Aksi | Hasil | Status |
+|------|-------|--------|
+| Klik tombol "Buka Jemuran" | Servo bergerak ke posisi buka | ✅ Berhasil |
+| Klik tombol "Tutup Jemuran" | Servo bergerak ke posisi tutup | ✅ Berhasil |
+| Klik tombol "Nyalakan Lampu" | LED menyala | ✅ Berhasil |
+| Klik tombol "Matikan Lampu" | LED mati | ✅ Berhasil |
+
+---
+
 ## 👥 Anggota Kelompok
 <ul>
     <li><strong>Muhammad Nizham Hibatullah</strong> (23552011241)</li>
     <li><strong>Sheva Nadhif Gazzauhar</strong> (23552011018)</li>
     <li><strong>Annisa Nur Fitriani</strong> (23552011192)</li>
 </ul>
+
+---
+
+## 📽️ Video Demo
+
+Drive: https://drive.google.com/drive/folders/1sKuenQusk21sA9kl7vEh9LVSUipHuWCu?usp=drive_link
